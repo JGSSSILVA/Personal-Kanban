@@ -250,3 +250,89 @@ button:hover {
     /* Allow height to fit content on mobile */
   }
 }
+
+/* User Selector Improvements */
+.user-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.user-btn {
+  flex-grow: 1;
+  text-align: left;
+}
+
+.edit-user-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+  width: auto;
+  margin: 0;
+}
+
+.edit-user-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.user-edit-row {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.user-edit-row input {
+  flex-grow: 1;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+}
+
+.save-btn {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 0.5rem 1rem;
+  width: auto;
+  margin: 0;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1rem;
+  width: auto;
+  margin: 0;
+}
+
+.success-modal {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.success-modal p {
+  color: #4ade80;
+  margin: 0 0 0.5rem 0;
+}
+
+.success-modal button {
+  background: #4ade80;
+  color: black;
+  border: none;
+  padding: 0.25rem 1rem;
+  font-size: 0.9rem;
+  width: auto;
+  margin: 0;
+}

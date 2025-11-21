@@ -3,32 +3,44 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { fetchWeather } from './services/weather';
 import CitySearch from './components/CitySearch';
 import InteractiveHeader from './components/InteractiveHeader';
+import UserSelector from './components/UserSelector';
+import { supabase } from './supabaseClient';
 
 function App() {
-  // Load from localStorage or default to empty lists
-  const [todos, setTodos] = useState(() => {
-    const saved = localStorage.getItem('todos');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [doneTodos, setDoneTodos] = useState(() => {
-    const saved = localStorage.getItem('doneTodos');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [currentUser, setCurrentUser] = useState(null);
+  const [todos, setTodos] = useState([]);
+  const [doneTodos, setDoneTodos] = useState([]);
   const [newTask, setNewTask] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newLocation, setNewLocation] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Save to localStorage whenever state changes
+  // Fetch todos when user changes
   useEffect(() => {
-    localStorage.setItem('todos', JSON.stringify(todos));
-  }, [todos]);
+    if (currentUser) {
+      fetchTodos();
+    }
+  }, [currentUser]);
 
-  useEffect(() => {
-    localStorage.setItem('doneTodos', JSON.stringify(doneTodos));
-  }, [doneTodos]);
+  const fetchTodos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const todoList = data.filter(t => !t.is_done);
+      const doneList = data.filter(t => t.is_done);
+
+      setTodos(todoList);
+      setDoneTodos(doneList);
+    } catch (error) {
+      console.error('Error fetching todos:', error);
+    }
+  };
 
   // Mouse tracking for reactive background
   useEffect(() => {
@@ -45,47 +57,83 @@ function App() {
 
   const handleAddTodo = async (e) => {
     e.preventDefault();
-    if (!newTask || !newDate || !newLocation) return;
+    if (!newTask || !newDate || !newLocation || !currentUser) return;
 
     setLoading(true);
     const weather = await fetchWeather(newLocation, newDate);
     setLoading(false);
 
-    const todo = {
-      id: Date.now().toString(),
+    const newTodo = {
+      user_id: currentUser.id,
       task: newTask,
       date: newDate,
       location: newLocation,
       weather,
+      is_done: false
     };
 
-    setTodos([todo, ...todos]);
-    setNewTask('');
-    setNewDate('');
-    setNewLocation('');
-  };
+    try {
+      const { data, error } = await supabase
+        .from('todos')
+        .insert([newTodo])
+        .select()
+        .single();
 
-  const handleDelete = (id, isDone) => {
-    if (isDone) {
-      setDoneTodos(doneTodos.filter(t => t.id !== id));
-    } else {
-      setTodos(todos.filter(t => t.id !== id));
+      if (error) throw error;
+
+      setTodos([data, ...todos]);
+      setNewTask('');
+      setNewDate('');
+      setNewLocation('');
+    } catch (error) {
+      console.error('Error adding todo:', error);
+      alert('Failed to add task');
     }
   };
 
-  const handleSaveEdit = (id, isDone, newTaskText) => {
+  const handleDelete = async (id, isDone) => {
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (isDone) {
+        setDoneTodos(doneTodos.filter(t => t.id !== id));
+      } else {
+        setTodos(todos.filter(t => t.id !== id));
+      }
+    } catch (error) {
+      console.error('Error deleting todo:', error);
+    }
+  };
+
+  const handleSaveEdit = async (id, isDone, newTaskText) => {
     if (!newTaskText || newTaskText.trim() === "") return;
 
-    const updateList = (list) => list.map(t => t.id === id ? { ...t, task: newTaskText } : t);
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({ task: newTaskText })
+        .eq('id', id);
 
-    if (isDone) {
-      setDoneTodos(updateList(doneTodos));
-    } else {
-      setTodos(updateList(todos));
+      if (error) throw error;
+
+      const updateList = (list) => list.map(t => t.id === id ? { ...t, task: newTaskText } : t);
+
+      if (isDone) {
+        setDoneTodos(updateList(doneTodos));
+      } else {
+        setTodos(updateList(todos));
+      }
+    } catch (error) {
+      console.error('Error updating todo:', error);
     }
   };
 
-  const onDragEnd = (result) => {
+  const onDragEnd = async (result) => {
     const { source, destination } = result;
 
     if (!destination) return;
@@ -94,6 +142,10 @@ function App() {
       return;
     }
 
+    const isMovingToDone = destination.droppableId === 'DONE';
+    const isMovingToTodo = destination.droppableId === 'TODO';
+
+    // Optimistic UI Update
     const getList = (id) => id === 'TODO' ? todos : doneTodos;
     const setList = (id, list) => id === 'TODO' ? setTodos(list) : setDoneTodos(list);
 
@@ -101,13 +153,32 @@ function App() {
     const destList = source.droppableId === destination.droppableId ? sourceList : Array.from(getList(destination.droppableId));
 
     const [removed] = sourceList.splice(source.index, 1);
-    destList.splice(destination.index, 0, removed);
+
+    // Update the item's status if moving between columns
+    const updatedItem = { ...removed, is_done: isMovingToDone };
+
+    destList.splice(destination.index, 0, updatedItem);
 
     if (source.droppableId === destination.droppableId) {
       setList(source.droppableId, sourceList);
     } else {
       setList(source.droppableId, sourceList);
       setList(destination.droppableId, destList);
+    }
+
+    // Persist to Supabase if status changed
+    if (source.droppableId !== destination.droppableId) {
+      try {
+        const { error } = await supabase
+          .from('todos')
+          .update({ is_done: isMovingToDone })
+          .eq('id', removed.id);
+
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error moving todo:', error);
+        // Ideally revert UI here on error
+      }
     }
   };
 
@@ -126,7 +197,7 @@ function App() {
     };
 
     return (
-      <Draggable draggableId={todo.id} index={index}>
+      <Draggable draggableId={todo.id.toString()} index={index}>
         {(provided) => (
           <div
             ref={provided.innerRef}
@@ -175,9 +246,26 @@ function App() {
     );
   };
 
+  if (!currentUser) {
+    return (
+      <div className="app-container">
+        <InteractiveHeader />
+        <UserSelector onSelectUser={setCurrentUser} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
-      <InteractiveHeader />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <InteractiveHeader />
+        <button
+          onClick={() => setCurrentUser(null)}
+          style={{ width: 'auto', margin: 0, fontSize: '0.8rem', padding: '0.5rem 1rem' }}
+        >
+          Switch User ({currentUser.name})
+        </button>
+      </div>
 
       <div className="card">
         <form onSubmit={handleAddTodo}>
