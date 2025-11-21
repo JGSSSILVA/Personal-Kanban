@@ -189,7 +189,7 @@ function App() {
               onChange={(e) => setNewTask(e.target.value)}
               required
             />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="input-group">
               <input
                 type="date"
                 value={newDate}
@@ -198,7 +198,7 @@ function App() {
                 style={{ colorScheme: 'dark' }}
               />
               <CitySearch
-                onSelect={(city) => setNewLocation(city.name)}
+                onSelect={(city) => setNewLocation(`${city.name}, ${city.country}`)}
                 required
                 value={newLocation}
                 onChange={setNewLocation}
