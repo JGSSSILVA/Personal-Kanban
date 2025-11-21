@@ -336,3 +336,37 @@ button:hover {
   width: auto;
   margin: 0;
 }
+
+.delete-user-btn {
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+  width: auto;
+  margin: 0;
+}
+
+.delete-user-btn:hover {
+  background: rgba(248, 113, 113, 0.1);
+  transform: scale(1.05);
+}
+
+.delete-confirm-btn {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  padding: 0.5rem 1rem;
+  width: auto;
+  margin: 0;
+}
+
+.delete-confirm-btn:hover {
+  background: rgba(248, 113, 113, 0.3);
+}
+
+.user-item-row.selected .user-btn {
+  font-weight: bold;
+}

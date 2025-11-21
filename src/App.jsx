@@ -7,27 +7,44 @@ import UserSelector from './components/UserSelector';
 import { supabase } from './supabaseClient';
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [selectedUsers, setSelectedUsers] = useState([]);
   const [todos, setTodos] = useState([]);
   const [doneTodos, setDoneTodos] = useState([]);
   const [newTask, setNewTask] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newLocation, setNewLocation] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Fetch todos when user changes
+  // Fetch todos when selected users change
   useEffect(() => {
-    if (currentUser) {
+    if (selectedUsers.length > 0) {
       fetchTodos();
+      // Default assignee to first selected user if not set or not in selection
+      if (!assigneeId || !selectedUsers.find(u => u.id === assigneeId)) {
+        setAssigneeId(selectedUsers[0].id);
+      }
+    } else {
+      setTodos([]);
+      setDoneTodos([]);
     }
-  }, [currentUser]);
+  }, [selectedUsers]);
+
+  const toggleUser = (user) => {
+    if (selectedUsers.find(u => u.id === user.id)) {
+      setSelectedUsers(selectedUsers.filter(u => u.id !== user.id));
+    } else {
+      setSelectedUsers([...selectedUsers, user]);
+    }
+  };
 
   const fetchTodos = async () => {
     try {
+      const userIds = selectedUsers.map(u => u.id);
       const { data, error } = await supabase
         .from('todos')
         .select('*')
-        .eq('user_id', currentUser.id)
+        .in('user_id', userIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -57,14 +74,14 @@ function App() {
 
   const handleAddTodo = async (e) => {
     e.preventDefault();
-    if (!newTask || !newDate || !newLocation || !currentUser) return;
+    if (!newTask || !newDate || !newLocation || !assigneeId) return;
 
     setLoading(true);
     const weather = await fetchWeather(newLocation, newDate);
     setLoading(false);
 
     const newTodo = {
-      user_id: currentUser.id,
+      user_id: assigneeId,
       task: newTask,
       date: newDate,
       location: newLocation,
@@ -143,7 +160,6 @@ function App() {
     }
 
     const isMovingToDone = destination.droppableId === 'DONE';
-    const isMovingToTodo = destination.droppableId === 'TODO';
 
     // Optimistic UI Update
     const getList = (id) => id === 'TODO' ? todos : doneTodos;
@@ -186,6 +202,10 @@ function App() {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(todo.task);
 
+    // Find user for this todo to get color
+    const user = selectedUsers.find(u => u.id === todo.user_id);
+    const userColor = user ? user.color : '#38bdf8'; // Default or fallback
+
     const onSave = () => {
       handleSaveEdit(todo.id, isDone, editValue);
       setIsEditing(false);
@@ -204,6 +224,7 @@ function App() {
             {...provided.draggableProps}
             {...provided.dragHandleProps}
             className="todo-item"
+            style={{ borderLeft: `4px solid ${userColor}` }}
           >
             <div className="todo-content">
               {isEditing ? (
@@ -222,6 +243,7 @@ function App() {
               <div className="todo-meta">
                 <span>📅 {todo.date}</span>
                 <span>📍 {todo.location}</span>
+                {user && <span style={{ color: userColor, fontSize: '0.7rem' }}>👤 {user.name}</span>}
               </div>
               <div className="weather-badge">
                 {todo.weather}
@@ -246,98 +268,104 @@ function App() {
     );
   };
 
-  if (!currentUser) {
-    return (
-      <div className="app-container">
-        <InteractiveHeader />
-        <UserSelector onSelectUser={setCurrentUser} />
-      </div>
-    );
-  }
-
   return (
     <div className="app-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <InteractiveHeader />
-        <button
-          onClick={() => setCurrentUser(null)}
-          style={{ width: 'auto', margin: 0, fontSize: '0.8rem', padding: '0.5rem 1rem' }}
-        >
-          Switch User ({currentUser.name})
-        </button>
-      </div>
+      <InteractiveHeader />
 
-      <div className="card">
-        <form onSubmit={handleAddTodo}>
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            <input
-              type="text"
-              placeholder="What needs to be done?"
-              value={newTask}
-              onChange={(e) => setNewTask(e.target.value)}
-              required
-            />
-            <div className="input-group">
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                required
-                style={{ colorScheme: 'dark' }}
-              />
-              <CitySearch
-                onSelect={(city) => setNewLocation(`${city.name}, ${city.country}`)}
-                required
-                value={newLocation}
-                onChange={setNewLocation}
-              />
+      <UserSelector selectedUsers={selectedUsers} onToggleUser={toggleUser} />
+
+      {selectedUsers.length > 0 && (
+        <>
+          <div className="card">
+            <form onSubmit={handleAddTodo}>
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                <input
+                  type="text"
+                  placeholder="What needs to be done?"
+                  value={newTask}
+                  onChange={(e) => setNewTask(e.target.value)}
+                  required
+                />
+                <div className="input-group">
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    required
+                    style={{ colorScheme: 'dark' }}
+                  />
+                  <CitySearch
+                    onSelect={(city) => setNewLocation(`${city.name}, ${city.country}`)}
+                    required
+                    value={newLocation}
+                    onChange={setNewLocation}
+                  />
+                </div>
+
+                {/* Assignee Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <label style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Assign to:</label>
+                  <select
+                    value={assigneeId}
+                    onChange={(e) => setAssigneeId(Number(e.target.value))}
+                    style={{ padding: '0.5rem', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.6)', color: 'white', border: '1px solid rgba(255, 255, 255, 0.1)' }}
+                  >
+                    {selectedUsers.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button type="submit" disabled={loading}>
+                  {loading ? 'Fetching Weather...' : 'Add Task'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="kanban-board">
+              <div className="kanban-column">
+                <h2>To Do</h2>
+                <Droppable droppableId="TODO">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      style={{ minHeight: '100px' }}
+                    >
+                      {todos.map((todo, index) => (
+                        <TodoCard key={todo.id} todo={todo} index={index} isDone={false} />
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+
+              <div className="kanban-column">
+                <h2>Done</h2>
+                <Droppable droppableId="DONE">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      style={{ minHeight: '100px' }}
+                    >
+                      {doneTodos.map((todo, index) => (
+                        <TodoCard key={todo.id} todo={todo} index={index} isDone={true} />
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
             </div>
-            <button type="submit" disabled={loading}>
-              {loading ? 'Fetching Weather...' : 'Add Task'}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="kanban-board">
-          <div className="kanban-column">
-            <h2>To Do</h2>
-            <Droppable droppableId="TODO">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  style={{ minHeight: '100px' }}
-                >
-                  {todos.map((todo, index) => (
-                    <TodoCard key={todo.id} todo={todo} index={index} isDone={false} />
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </div>
-
-          <div className="kanban-column">
-            <h2>Done</h2>
-            <Droppable droppableId="DONE">
-              {(provided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  style={{ minHeight: '100px' }}
-                >
-                  {doneTodos.map((todo, index) => (
-                    <TodoCard key={todo.id} todo={todo} index={index} isDone={true} />
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </div>
-        </div>
-      </DragDropContext>
+          </DragDropContext>
+        </>
+      )}
     </div>
   );
 }
